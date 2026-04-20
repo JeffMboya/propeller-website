@@ -12,7 +12,7 @@
     "tee.mdx",
     "wasi-http.mdx",
     "hal-test.mdx",
-    "attestation-test.mdx",
+    "elastic-hal.mdx",
     "wasi-nn.mdx"
   ]
 }
