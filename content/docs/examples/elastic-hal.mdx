@@ -5,7 +5,14 @@ description: Running a WASM component using the elastic:hal interface
 
 A WebAssembly component example using the [Elastic HAL](https://github.com/elasticproject-eu/wasmhal) `elastic:hal/attestation@0.1.0` interface. The component requests a TEE attestation report and returns the evidence as bytes. It runs via `hal-runtime`, which provides the HAL host functions to the component.
 
-> **Note:** Running `attestation-test` through the Propeller task pipeline requires adding `elastic:hal` component model bindings to the proplet's wasmtime linker. That support is not yet in the proplet. For now, run the component directly with `hal-runtime` as shown below.
+> **Elastic HAL vs HAL Test**
+>
+> Propeller has two HAL examples that serve different purposes:
+>
+> - [HAL Test](./hal-test) uses the older `elastic:tee-hal/*` C-ABI interface (wasip1). It runs end-to-end through the Propeller task pipeline today using `PROPLET_HAL_ENABLED=true`.
+> - **This example** uses the newer `elastic:hal/*` WIT component model interface (wasip2). It reflects the direction the [wasmhal](https://github.com/elasticproject-eu/wasmhal) project is heading but runs via `hal-runtime` directly — the proplet's wasmtime linker does not yet provide `elastic:hal` host imports for the component model path.
+>
+> If you want to run a HAL workload through the Propeller task pipeline today, start with [HAL Test](./hal-test).
 
 ## Source Code
 
