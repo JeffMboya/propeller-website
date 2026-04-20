@@ -1,20 +1,11 @@
 ---
 title: Attestation Test
-description: Attestation Test example
+description: Attestation Test example using elastic:hal
 ---
 
-A WASM component example using the [Elastic HAL](https://github.com/elasticproject-eu/wasmhal) `elastic:hal@0.1.0` interface. It queries platform info, generates a random nonce, and requests TEE attestation evidence via the `hal-consumer` world.
+A WebAssembly component example using the [Elastic HAL](https://github.com/elasticproject-eu/wasmhal) `elastic:hal/attestation@0.1.0` interface. The component requests a TEE attestation report and returns the evidence as bytes. It runs via `hal-runtime`, which provides the HAL host functions to the component.
 
-## Prerequisites
-
-- A running proplet with HAL enabled, or a TDX-capable machine.
-
-To enable HAL in the proplet:
-
-```bash
-export PROPLET_EXTERNAL_WASM_RUNTIME=""
-export PROPLET_HAL_ENABLED=true
-```
+> **Note:** Running `attestation-test` through the Propeller task pipeline requires adding `elastic:hal` component model bindings to the proplet's wasmtime linker. That support is not yet in the proplet. For now, run the component directly with `hal-runtime` as shown below.
 
 ## Source Code
 
@@ -25,115 +16,152 @@ The source code is available in the [examples/attestation-test](https://github.c
   lang="rust"
 />
 
+The WIT interface is defined in [examples/attestation-test/wit/hal.wit](https://github.com/absmach/propeller/blob/main/examples/attestation-test/wit/hal.wit):
+
+<CodeFromSource
+  src="https://raw.githubusercontent.com/absmach/propeller/refs/heads/main/examples/attestation-test/wit/hal.wit"
+  lang="wit"
+/>
+
+## Prerequisites
+
+Build `hal-runtime` from [wasmhal](https://github.com/elasticproject-eu/wasmhal) at commit `cfe99ef`:
+
+```bash
+git clone https://github.com/elasticproject-eu/wasmhal.git
+cd wasmhal && git checkout cfe99ef41f369d35bc04a049b47d32951cb19981
+cd hal-runtime && cargo build --release
+```
+
 ## Build
 
 ```bash
-cd examples/attestation-test && cargo build --release --target wasm32-wasip2
+cd propeller
+make attestation-test
 ```
 
 Your output should look like this:
 
 ```bash
-   Compiling attestation-test v0.1.0
-    Finished `release` profile [optimized] target(s) in 2.34s
+cd examples/attestation-test && cargo build --target wasm32-wasip2 --release
+    Finished `release` profile [optimized] target(s) in 0.40s
+cp examples/attestation-test/target/wasm32-wasip2/release/attestation_test.wasm build/attestation-test.wasm
 ```
 
-The component is at `target/wasm32-wasip2/release/attestation_test.wasm`.
+## Running Without TEE
 
-## Create Task
+On a standard host without a confidential computing environment, the HAL returns a simulated attestation report:
 
 ```bash
-curl -X POST "http://localhost:7070/tasks" \
--H "Content-Type: application/json" \
--d '{"name": "attestation-test"}'
+hal-runtime ./build/attestation-test.wasm
 ```
 
 Your output should look like this:
+
+```bash
+[2026-04-20T16:46:43Z INFO  hal_runtime] Starting HAL Runtime
+[2026-04-20T16:46:43Z INFO  hal_runtime] Loading component: "./build/attestation-test.wasm"
+[2026-04-20T16:46:43Z INFO  hal_runtime] Component loaded successfully
+[2026-04-20T16:46:43Z INFO  hal_runtime] Runtime ready - component has access to HAL interfaces
+[2026-04-20T16:46:43Z INFO  elastic_tee_hal::platform] Initializing AMD SEV-SNP platform
+[2026-04-20T16:46:43Z INFO  elastic_tee_hal::platform] ELASTIC TEE HAL initialized for platform: AmdSev
+Intel TDX Detection:
+  - Intel CPU: true
+  - /dev/tdx_guest: false
+  - TSM support: false
+  - TDX CPU flag: false
+[2026-04-20T16:46:43Z INFO  elastic_tee_hal::resources] Detected system limits: 249334MB RAM, 64 CPU cores (TEE: TDX=false, SEV=false)
+Intel TDX Detection:
+  - Intel CPU: true
+  - /dev/tdx_guest: false
+  - TSM support: false
+  - TDX CPU flag: false
+Intel TDX Detection:
+  - Intel CPU: true
+  - /dev/tdx_guest: false
+  - TSM support: false
+  - TDX CPU flag: false
+[2026-04-20T16:46:43Z INFO  elastic_tee_hal::platform] Generating AMD SEV attestation report with 32 bytes of report data
+attestation: ok (evidence len=314)
+[2026-04-20T16:46:43Z INFO  hal_runtime] Component returned 314 bytes of report-data
+[2026-04-20T16:46:43Z INFO  hal_runtime] Report-data (hex): 7b226d6561737572656d656e7473223a7b22626f6f746c6f61646572223a22706c616365686f6c6465725f68617368222c2268616c223a22706c616365686f6c6465725f68617368222c226b65726e656c223a22706c616365686f6c6465725f68617368227d2c22706c6174666f726d223a22616d642d7365762d736e70222c227265706f72745f64617461223a223432343234323432343234323432343234323432343234323432343234323432343234323432343234323432343234323432343234323432343234323432343230303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030222c2274696d657374616d70223a313737363730333630332c2276657273696f6e223a22302e312e30227d
+```
+
+The hex-encoded report data decodes to:
 
 ```json
 {
-  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-  "name": "attestation-test",
-  "kind": "standard",
-  "state": 0,
-  "cli_args": null,
-  "daemon": false,
-  "encrypted": false,
-  "start_time": "0001-01-01T00:00:00Z",
-  "finish_time": "0001-01-01T00:00:00Z",
-  "created_at": "2026-03-19T10:00:00.000000000Z",
-  "updated_at": "0001-01-01T00:00:00Z",
-  "next_run": "0001-01-01T00:00:00Z",
-  "priority": 50
+  "measurements": {
+    "bootloader": "placeholder_hash",
+    "hal": "placeholder_hash",
+    "kernel": "placeholder_hash"
+  },
+  "platform": "amd-sev-snp",
+  "report_data": "4242424242424242424242424242424242424242424242424242424242424242...",
+  "timestamp": 1776703603,
+  "version": "0.1.0"
 }
 ```
 
-## Upload Wasm
+Without a TEE, the HAL returns a simulated report with `placeholder_hash` measurements.
+
+## Running Inside an Intel TDX CVM
+
+Inside a Confidential VM with Intel TDX, the HAL detects the hardware environment and all four TDX indicators are confirmed. Load the TDX guest driver first, then run the component:
 
 ```bash
-curl -X PUT "http://localhost:7070/tasks/b2c3d4e5-f6a7-8901-bcde-f12345678901/upload" \
--F "file=@examples/attestation-test/target/wasm32-wasip2/release/attestation_test.wasm"
+sudo modprobe tdx-guest
+hal-runtime ./attestation-test.wasm
 ```
 
 Your output should look like this:
 
-```json
-{
-  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-  "name": "attestation-test",
-  "kind": "standard",
-  "state": 0,
-  "file": "...<redacted>...",
-  "cli_args": null,
-  "daemon": false,
-  "encrypted": false,
-  "start_time": "0001-01-01T00:00:00Z",
-  "finish_time": "0001-01-01T00:00:00Z",
-  "created_at": "2026-03-19T10:00:00.000000000Z",
-  "updated_at": "2026-03-19T10:01:00.000000000Z",
-  "next_run": "0001-01-01T00:00:00Z",
-  "priority": 50
-}
-```
-
-## Start Task
-
 ```bash
-curl -X POST "http://localhost:7070/tasks/b2c3d4e5-f6a7-8901-bcde-f12345678901/start"
+[2026-04-20T16:34:15Z INFO  hal_runtime] Starting HAL Runtime
+[2026-04-20T16:34:15Z INFO  hal_runtime] Loading component: "./attestation-test.wasm"
+[2026-04-20T16:34:15Z INFO  hal_runtime] Component loaded successfully
+[2026-04-20T16:34:15Z INFO  hal_runtime] Runtime ready - component has access to HAL interfaces
+[2026-04-20T16:34:16Z INFO  elastic_tee_hal::platform] Initializing AMD SEV-SNP platform
+[2026-04-20T16:34:16Z INFO  elastic_tee_hal::platform] ELASTIC TEE HAL initialized for platform: AmdSev
+Intel TDX Detection:
+  - Intel CPU: true
+  - /dev/tdx_guest: true
+  - TSM support: true
+  - TDX CPU flag: true
+[2026-04-20T16:34:16Z INFO  elastic_tee_hal::resources] Detected system limits: 13813MB RAM, 4 CPU cores (TEE: TDX=true, SEV=false)
+Intel TDX Detection:
+  - Intel CPU: true
+  - /dev/tdx_guest: true
+  - TSM support: true
+  - TDX CPU flag: true
+[2026-04-20T16:34:16Z INFO  elastic_tee_hal::events] Event interface initialized in Intel TDX secure mode
+Intel TDX Detection:
+  - Intel CPU: true
+  - /dev/tdx_guest: true
+  - TSM support: true
+  - TDX CPU flag: true
+[2026-04-20T16:34:16Z INFO  elastic_tee_hal::communication] Communication interface initialized in Intel TDX secure mode
+[2026-04-20T16:34:16Z INFO  elastic_tee_hal::communication] All communication buffers are protected by TDX memory encryption
+[2026-04-20T16:34:16Z INFO  elastic_tee_hal::platform] Generating AMD SEV attestation report with 32 bytes of report data
+attestation: ok (evidence len=314)
+[2026-04-20T16:34:16Z INFO  hal_runtime] Component returned 314 bytes of report-data
+[2026-04-20T16:34:16Z INFO  hal_runtime] Report-data (hex): 7b226d6561737572656d656e7473223a7b22626f6f746c6f61646572223a22706c616365686f6c6465725f68617368222c2268616c223a22706c616365686f6c6465725f68617368222c226b65726e656c223a22706c616365686f6c6465725f68617368227d2c22706c6174666f726d223a22616d642d7365762d736e70222c227265706f72745f64617461223a223432343234323432343234323432343234323432343234323432343234323432343234323432343234323432343234323432343234323432343234323432343230303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030222c2274696d657374616d70223a313737363730323835362c2276657273696f6e223a22302e312e30227d
 ```
 
-Your output should look like this:
-
-```json
-{ "started": true }
-```
-
-On a TDX CVM, the proplet logs will show:
-
-```bash
-platform: IntelTdx v0.1.0
-attestation: ok (evidence len=863)
-```
-
-The task will complete in state 3:
-
-```bash
-curl -X GET "http://localhost:7070/tasks/b2c3d4e5-f6a7-8901-bcde-f12345678901"
-```
+The hex-encoded report data decodes to:
 
 ```json
 {
-  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-  "name": "attestation-test",
-  "kind": "standard",
-  "state": 3,
-  "proplet_id": "83a56492-5a89-4852-beee-a3ba95eca876",
-  "results": "...<hex-encoded attestation evidence>...",
-  "start_time": "2026-03-19T10:02:00.000000000Z",
-  "finish_time": "2026-03-19T10:02:00.200000000Z",
-  "created_at": "2026-03-19T10:00:00.000000000Z",
-  "updated_at": "2026-03-19T10:02:00.200000000Z",
-  "next_run": "0001-01-01T00:00:00Z",
-  "priority": 50
+  "measurements": {
+    "bootloader": "placeholder_hash",
+    "hal": "placeholder_hash",
+    "kernel": "placeholder_hash"
+  },
+  "platform": "amd-sev-snp",
+  "report_data": "4242424242424242424242424242424242424242424242424242424242424242...",
+  "timestamp": 1776702856,
+  "version": "0.1.0"
 }
 ```
+
+Inside a TDX CVM all four detection indicators are true (`/dev/tdx_guest`, TSM support, TDX CPU flag, Intel CPU). The component calls and evidence format are identical to the non-TEE run — the difference is visible in the detection log lines and will be in the measurements once full `TDXGUEST_GET_REPORT0` support lands in wasmhal.
